@@ -48,7 +48,9 @@ export async function POST(request: Request) {
   try {
     await connection.beginTransaction();
     const now = new Date().toISOString();
-    await connection.execute(`INSERT INTO vouchers (code,origin_city,origin_airport,origin_code,destination_city,destination_airport,destination_code,flight_type,duration_minutes,carry_on_kg,checked_baggage_kg,default_travel_date,earliest_travel_date,latest_travel_date,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [input.code,input.originCity,input.originAirport,input.originCode,input.destinationCity,input.destinationAirport,input.destinationCode,input.flightType,input.durationMinutes,input.carryOnKg,input.checkedBaggageKg,input.travelDates[0],input.travelDates[0],input.travelDates.at(-1),"active",now]);
+    const firstTravelDate = input.travelDates[0]!;
+    const lastTravelDate = input.travelDates[input.travelDates.length - 1]!;
+    await connection.execute(`INSERT INTO vouchers (code,origin_city,origin_airport,origin_code,destination_city,destination_airport,destination_code,flight_type,duration_minutes,carry_on_kg,checked_baggage_kg,default_travel_date,earliest_travel_date,latest_travel_date,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [input.code,input.originCity,input.originAirport,input.originCode,input.destinationCity,input.destinationAirport,input.destinationCode,input.flightType,input.durationMinutes,input.carryOnKg,input.checkedBaggageKg,firstTravelDate,firstTravelDate,lastTravelDate,"active",now]);
     for (const date of input.travelDates) await connection.execute("INSERT INTO voucher_travel_dates (voucher_code,travel_date) VALUES (?,?)", [input.code,date]);
     await connection.commit();
     return Response.json({ created: true, code: input.code }, { status: 201 });

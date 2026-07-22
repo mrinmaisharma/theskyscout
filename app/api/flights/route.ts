@@ -28,7 +28,15 @@ export async function GET(request: Request) {
   const returnDate = requestUrl.searchParams.get("returnDate") ?? "";
   const tripType = requestUrl.searchParams.get("tripType") === "oneway" ? "oneway" : "return";
   const adults = Math.min(9, Math.max(1, Number.parseInt(requestUrl.searchParams.get("adults") ?? "1", 10) || 1));
+  const latitudeValue = requestUrl.searchParams.get("latitude");
+  const longitudeValue = requestUrl.searchParams.get("longitude");
+  const latitude = latitudeValue === null ? Number.NaN : Number(latitudeValue);
+  const longitude = longitudeValue === null ? Number.NaN : Number(longitudeValue);
   const apiKey = process.env.FLIGHTAPI_KEY;
+
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    return NextResponse.json({ error: "Confirm your current location before searching for flights." }, { status: 400 });
+  }
 
   if (!IATA_PATTERN.test(departure) || !IATA_PATTERN.test(arrival) || departure === arrival) {
     return NextResponse.json({ error: "Enter two different valid three-letter airport codes." }, { status: 400 });

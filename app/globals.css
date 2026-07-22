@@ -52,6 +52,7 @@ input[type="checkbox"] { width:16px; height:16px; accent-color:var(--blue); }
 .search-button:hover { background:#075ebe; transform:translateY(-1px); }
 .search-button:disabled { opacity:.72; cursor:wait; transform:none; }
 .search-button b { font-size:19px; }
+.search-location-status{display:flex;align-items:center;gap:7px;margin-top:8px;color:#687985;font-size:10px}.search-location-status>span{width:18px;height:18px;border-radius:50%;background:#edf3f7;color:#557080;display:grid;place-items:center;font-weight:850}.search-location-status.confirmed{color:#08745a}.search-location-status.confirmed>span{background:#dcf5eb;color:#08745a}.search-location-status.blocked{color:#a13b31}.search-location-status.blocked>span{background:#ffe3df;color:#a13b31}
 .traveller-popover { position:absolute; top:65px; right:0; z-index:10; width:300px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; box-shadow:0 14px 35px rgba(16,36,54,.18); }
 .traveller-popover>div { display:flex; justify-content:space-between; align-items:center; }
 .traveller-popover span { display:flex; flex-direction:column; }

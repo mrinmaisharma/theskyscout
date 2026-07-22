@@ -1,8 +1,9 @@
 import { clean } from "@/lib/voucher-security";
+import type { Connection } from "mysql2/promise";
 
 export const VISITOR_COOKIE = "skyscout_visitor";
 
-type SqlConnection = { execute(sql: string, values?: unknown[]): Promise<[unknown, unknown]> };
+type SqlConnection = Pick<Connection, "execute">;
 
 function cookieValue(request: Request, name: string) {
   return request.headers.get("cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1) || "";

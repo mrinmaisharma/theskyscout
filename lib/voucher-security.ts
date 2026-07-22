@@ -1,8 +1,7 @@
-import { env } from "cloudflare:workers";
+import type { Connection } from "mysql2/promise";
 
 export function runtimeValue(name: string) {
-  const workerValue = (env as unknown as Record<string, unknown>)[name];
-  return process.env[name] || (typeof workerValue === "string" ? workerValue : "");
+  return process.env[name] || "";
 }
 
 export function mysqlConfig() {
@@ -74,7 +73,7 @@ export function generateOtp() {
   return number.toString().padStart(6, "0");
 }
 
-type SqlConnection = { execute(sql: string, values?: unknown[]): Promise<[unknown, unknown]> };
+type SqlConnection = Pick<Connection, "execute">;
 
 export class OtpError extends Error {
   constructor(message: string, public status = 400) { super(message); }

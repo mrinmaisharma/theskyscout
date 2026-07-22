@@ -26,7 +26,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ code
     const voucher = (rows as { status: string }[])[0];
     if (!voucher) { await connection.rollback(); return Response.json({ error: "Voucher not found." }, { status: 404 }); }
     if (voucher.status === "redeemed") { await connection.rollback(); return Response.json({ error: "A redeemed voucher is locked and cannot be changed." }, { status: 409 }); }
-    await connection.execute(`UPDATE vouchers SET origin_city=?,origin_airport=?,origin_code=?,destination_city=?,destination_airport=?,destination_code=?,flight_type=?,duration_minutes=?,carry_on_kg=?,checked_baggage_kg=?,default_travel_date=?,earliest_travel_date=?,latest_travel_date=? WHERE code=?`, [input.originCity,input.originAirport,input.originCode,input.destinationCity,input.destinationAirport,input.destinationCode,input.flightType,input.durationMinutes,input.carryOnKg,input.checkedBaggageKg,input.travelDates[0],input.travelDates[0],input.travelDates.at(-1),code]);
+    const firstTravelDate = input.travelDates[0]!;
+    const lastTravelDate = input.travelDates[input.travelDates.length - 1]!;
+    await connection.execute(`UPDATE vouchers SET origin_city=?,origin_airport=?,origin_code=?,destination_city=?,destination_airport=?,destination_code=?,flight_type=?,duration_minutes=?,carry_on_kg=?,checked_baggage_kg=?,default_travel_date=?,earliest_travel_date=?,latest_travel_date=? WHERE code=?`, [input.originCity,input.originAirport,input.originCode,input.destinationCity,input.destinationAirport,input.destinationCode,input.flightType,input.durationMinutes,input.carryOnKg,input.checkedBaggageKg,firstTravelDate,firstTravelDate,lastTravelDate,code]);
     await connection.execute("DELETE FROM voucher_travel_dates WHERE voucher_code = ?", [code]);
     for (const date of input.travelDates) await connection.execute("INSERT INTO voucher_travel_dates (voucher_code,travel_date) VALUES (?,?)", [code,date]);
     await connection.commit();

@@ -20,6 +20,13 @@ type Flight = {
   tag?: string;
 };
 
+type SearchLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  capturedAt: string;
+};
+
 const popular = [
   { city: "Cebu", code: "CEB", price: "Explore", color: "sunset" },
   { city: "Dubai", code: "DXB", price: "Explore", color: "coast" },
@@ -65,7 +72,7 @@ export default function Home() {
   const [from, setFrom] = useState("Manila (MNL)");
   const [to, setTo] = useState("Abu Dhabi (AUH)");
   const [sort, setSort] = useState("best");
-  const [departDate, setDepartDate] = useState("2026-08-02");
+  const [departDate, setDepartDate] = useState("2026-08-06");
   const [returnDate, setReturnDate] = useState("2026-09-24");
   const [travellersOpen, setTravellersOpen] = useState(false);
   const [travellers, setTravellers] = useState(1);
@@ -76,7 +83,9 @@ export default function Home() {
   const [formError, setFormError] = useState("");
   const [activeAirport, setActiveAirport] = useState<"from" | "to" | null>(null);
   const [lastSearchKey, setLastSearchKey] = useState("");
-  const [directOnly, setDirectOnly] = useState(false);
+  const [directOnly, setDirectOnly] = useState(true);
+  const [searchLocation, setSearchLocation] = useState<SearchLocation | null>(null);
+  const [locationState, setLocationState] = useState<"idle" | "requesting" | "denied">("idle");
 
   const visibleFlights = useMemo(() => directOnly ? fareFlights.filter((flight) => flight.stops === 0) : fareFlights, [directOnly, fareFlights]);
 
@@ -114,7 +123,37 @@ export default function Home() {
   const formatDuration = (minutes: number) => `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   const formatPrice = (flight: Flight | null) => flight ? new Intl.NumberFormat("en-AE", { style: "currency", currency: flight.currency, maximumFractionDigits: 0 }).format(flight.price) : "—";
 
-  const runSearch = async (destinationOverride?: string) => {
+  const captureSearchLocation = () => new Promise<SearchLocation | null>((resolve) => {
+    if (!navigator.geolocation) {
+      setLocationState("denied");
+      setFormError("Flight search requires GPS, but this browser does not support location access.");
+      resolve(null);
+      return;
+    }
+    setLocationState("requesting");
+    setFormError("");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const captured = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          capturedAt: new Date(position.timestamp).toISOString(),
+        };
+        setSearchLocation(captured);
+        setLocationState("idle");
+        resolve(captured);
+      },
+      () => {
+        setLocationState("denied");
+        setFormError("Location permission is required to search. Allow location in your browser settings, then click Search again.");
+        resolve(null);
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
+    );
+  });
+
+  const runSearch = async (destinationOverride?: string, confirmedLocation?: SearchLocation | null) => {
     const searchedDestination = destinationOverride ?? to;
     const origin = airportCode(from);
     const destination = airportCode(searchedDestination);
@@ -130,18 +169,40 @@ export default function Home() {
       setFormError("Choose a return date after the departure date.");
       return;
     }
+    const location = confirmedLocation ?? searchLocation;
+    if (!location) {
+      const captured = await captureSearchLocation();
+      if (!captured) return;
+      await runSearch(destinationOverride, captured);
+      return;
+    }
     const searchKey = `${origin}:${destination}:${departDate}:${tripType === "One way" ? "" : returnDate}:${travellers}:${tripType}:AED`;
     setFormError("");
-    setSearched(true);
     setNotice("");
-    if (searchKey === lastSearchKey && fareFlights.length > 0) return;
+    if (searchKey === lastSearchKey && fareFlights.length > 0) {
+      setSearched(true);
+      return;
+    }
+    setFareLoading(true);
+    try {
+      const logResponse = await fetch("/api/usage/search-location", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...location, departure: origin, arrival: destination, departureDate: departDate, returnDate, tripType: tripType === "One way" ? "oneway" : "return", adults: travellers }),
+      });
+      if (!logResponse.ok) throw new Error("Your required location could not be recorded. Please try again.");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Your required location could not be recorded. Please try again.");
+      setFareLoading(false);
+      return;
+    }
+    setSearched(true);
     setFareFlights([]);
     setFareError("");
-    setFareLoading(true);
     window.setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
 
     try {
-      const params = new URLSearchParams({ departure: origin, arrival: destination, departureDate: departDate, returnDate, tripType: tripType === "One way" ? "oneway" : "return", adults: String(travellers), currency: "AED" });
+      const params = new URLSearchParams({ departure: origin, arrival: destination, departureDate: departDate, returnDate, tripType: tripType === "One way" ? "oneway" : "return", adults: String(travellers), currency: "AED", latitude: String(location.latitude), longitude: String(location.longitude) });
       const response = await fetch(`/api/flights?${params.toString()}`);
       const payload = await response.json() as { flights?: Flight[]; error?: string };
       if (!response.ok) throw new Error(payload.error || "Live fares are unavailable.");
@@ -158,7 +219,7 @@ export default function Home() {
     const origin = airportCode(from);
     const destination = airportCode(to);
     const returning = tripType === "One way" ? "" : ` returning ${returnDate}`;
-    let url = `https://www.google.com/travel/flights?q=${encodeURIComponent(`Flights from ${origin} to ${destination} on ${departDate}${returning}`)}`;
+    const url = `https://www.google.com/travel/flights?q=${encodeURIComponent(`Flights from ${origin} to ${destination} on ${departDate}${returning}`)}`;
 
     window.location.assign(url);
   };
@@ -239,8 +300,9 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              <button className="search-button" onClick={() => runSearch()} disabled={fareLoading}><span>{fareLoading ? "Searching" : "Search"}</span><b>→</b></button>
+              <button className="search-button" onClick={() => runSearch()} disabled={fareLoading || locationState === "requesting"}><span>{fareLoading ? "Searching" : locationState === "requesting" ? "Confirming GPS" : "Search"}</span><b>→</b></button>
             </div>
+            <div className={`search-location-status ${searchLocation ? "confirmed" : locationState === "denied" ? "blocked" : ""}`}><span>{searchLocation ? "✓" : "⌖"}</span>{searchLocation ? "GPS confirmed. Your coordinates will be recorded with each flight search." : "GPS permission is required before flight search can begin."}</div>
             {formError && <div className="search-error" role="alert"><span>!</span>{formError}</div>}
           </div>
 
@@ -265,7 +327,7 @@ export default function Home() {
           </div>
           <div className="confidence-strip">
             <div className="confidence-icon">⌁</div>
-            <div><b>Book with confidence</b><span>We search every corner of the web so you don't have to.</span></div>
+              <div><b>Book with confidence</b><span>We search every corner of the web so you don&apos;t have to.</span></div>
             <div className="partner-logos"><span>LATAM</span><span>oneworld</span><span>IBERIA</span><span>KLM</span></div>
           </div>
         </section>
